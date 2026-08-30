@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type PointerEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type PointerEvent,
+} from 'react';
 
 import './App.css';
 import { BiseokScene } from './game/Scene';
@@ -7,9 +13,11 @@ import {
   transitionGame,
   type GameStatus,
 } from './game/state';
+import { compileStudentCode, type StudentCodeError } from './game/studentCode';
 import { clampAim, calculateThrow, nudgeAim, type Aim } from './game/throwing';
 
 const keyboardStep = 28;
+const starterCode = 'biseok.throw({ power: 7 });';
 
 type AimDrag = Readonly<{
   aim: Aim;
@@ -39,10 +47,24 @@ function statusMessage(status: GameStatus) {
   }
 }
 
+function codeErrorMessage(error: StudentCodeError) {
+  switch (error) {
+    case 'syntax':
+      return '괄호나 따옴표를 확인해요.';
+    case 'power':
+      return 'power를 1에서 10으로 고쳐요.';
+    default:
+      return '이 줄을 biseok.throw({ power: 숫자 });로 고쳐요.';
+  }
+}
+
 export function App() {
   const [webglAvailable] = useState(supportsWebGL);
   const [game, setGame] = useState(initialGameState);
   const [aim, setAim] = useState<Aim>({ x: 0, y: 0 });
+  const [code, setCode] = useState(starterCode);
+  const [codeError, setCodeError] = useState<StudentCodeError | null>(null);
+  const [throwPower, setThrowPower] = useState(7);
   const [dragStart, setDragStart] = useState<AimDrag | null>(null);
   const [debugStats, setDebugStats] = useState({
     calls: 0,
@@ -51,16 +73,39 @@ export function App() {
   });
   const debug =
     new URLSearchParams(window.location.search).get('debug') === '1';
-  const throwVector = useMemo(() => calculateThrow(aim), [aim]);
+  const throwVector = useMemo(
+    () => calculateThrow(aim, throwPower),
+    [aim, throwPower],
+  );
+
+  const throwRound = useCallback(() => {
+    if (game.status !== 'ready') {
+      return;
+    }
+
+    const result = compileStudentCode(code);
+    if (!result.ok) {
+      setCodeError(result.error);
+      return;
+    }
+
+    setCodeError(null);
+    setThrowPower(result.command.power);
+    setGame((current) => transitionGame(current, { type: 'throw' }));
+  }, [code, game.status]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
       if (event.key === ' ' || event.key === 'Enter') {
         event.preventDefault();
         if (event.repeat) {
           return;
         }
-        setGame((current) => transitionGame(current, { type: 'throw' }));
+        throwRound();
         return;
       }
 
@@ -82,7 +127,7 @@ export function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [game.status]);
+  }, [game.status, throwRound]);
 
   if (!webglAvailable) {
     return (
@@ -120,15 +165,12 @@ export function App() {
     );
   };
 
-  const throwRound = () => {
-    setGame((current) => transitionGame(current, { type: 'throw' }));
-  };
-
   const finishAim = () => setDragStart(null);
   const reset = () => {
     setGame((current) => transitionGame(current, { type: 'reset' }));
     setAim({ x: 0, y: 0 });
     setDragStart(null);
+    setCodeError(null);
     setDebugStats({ calls: 0, fps: 0, triangles: 0 });
   };
   const dotPosition = {
@@ -166,7 +208,7 @@ export function App() {
           </div>
           <div>
             <h2>이번 판 규칙</h2>
-            <p className="rule">원을 드래그해 방향을 정해요.</p>
+            <p className="rule">조준은 방향, power는 힘이에요.</p>
           </div>
           <p className="status" aria-live="polite">
             {statusMessage(game.status)}
@@ -184,9 +226,34 @@ export function App() {
             <div aria-hidden="true" className="aim-dot" style={dotPosition} />
           </div>
           <p className="control-help" id="aim-instructions">
-            조준 원을 클릭하거나 탭한 뒤 드래그하세요. 화살표로 방향을 조절하고
-            Enter 또는 Space로 던집니다.
+            조준 원을 드래그하거나 화살표로 방향을 정해요.
           </p>
+          <div className="code-editor">
+            <label htmlFor="throw-code">돌 던지는 코드</label>
+            <textarea
+              aria-describedby={
+                codeError ? 'code-help code-error' : 'code-help'
+              }
+              autoCapitalize="off"
+              autoComplete="off"
+              autoCorrect="off"
+              id="throw-code"
+              onChange={(event) => {
+                setCode(event.target.value);
+                setCodeError(null);
+              }}
+              spellCheck={false}
+              value={code}
+            />
+            <p className="control-help" id="code-help">
+              power를 1부터 10까지 바꿔 보세요.
+            </p>
+            {codeError ? (
+              <p className="code-error" id="code-error" role="alert">
+                {codeErrorMessage(codeError)}
+              </p>
+            ) : null}
+          </div>
           <div className="button-row">
             <button
               className="primary-button"
@@ -194,7 +261,7 @@ export function App() {
               onClick={throwRound}
               type="button"
             >
-              한 번 던져 보기
+              코드로 던지기
             </button>
             <button className="secondary-button" onClick={reset} type="button">
               다시 놓기

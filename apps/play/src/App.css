@@ -149,6 +149,41 @@ h2 {
   text-align: center;
 }
 
+.code-editor {
+  display: grid;
+  gap: 7px;
+}
+
+.code-editor label {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.code-editor textarea {
+  min-height: 82px;
+  resize: vertical;
+  border: 1px solid #9b8368;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fffaf3;
+  color: #2f2925;
+  font:
+    0.84rem/1.5 Consolas,
+    'Courier New',
+    monospace;
+}
+
+.code-editor textarea:focus-visible {
+  outline: 3px solid #3c6a7d;
+  outline-offset: 2px;
+}
+
+.code-error {
+  color: #9b3028;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
 .debug-hud {
   position: absolute;
   top: 10px;

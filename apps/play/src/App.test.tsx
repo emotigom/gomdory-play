@@ -4,8 +4,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 
 vi.mock('./game/Scene', () => ({
-  BiseokScene: ({ status }: { status: string }) => (
-    <output data-testid="scene-status">{status}</output>
+  BiseokScene: ({
+    status,
+    throwVector,
+  }: {
+    status: string;
+    throwVector: { strength: number };
+  }) => (
+    <output data-strength={throwVector.strength} data-testid="scene-status">
+      {status}
+    </output>
   ),
 }));
 
@@ -76,6 +84,40 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
     expect(screen.getByTestId('scene-status')).toHaveTextContent('ready');
     expect(aimDot).toHaveStyle({ left: '50%', top: '50%' });
+
+    getContext.mockRestore();
+  });
+
+  it('runs corrected code without a refresh and keeps it after reset', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    fireEvent.change(editor, { target: { value: 'const power = 9;' } });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+
+    expect(screen.getByTestId('scene-status')).toHaveTextContent('ready');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      '이 줄을 biseok.throw({ power: 숫자 });로 고쳐요.',
+    );
+
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 9 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+
+    expect(screen.getByTestId('scene-status')).toHaveTextContent('flying');
+    expect(screen.getByTestId('scene-status')).toHaveAttribute(
+      'data-strength',
+      '12.6',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    expect(screen.getByTestId('scene-status')).toHaveTextContent('ready');
+    expect(editor).toHaveValue('biseok.throw({ power: 9 });');
 
     getContext.mockRestore();
   });
