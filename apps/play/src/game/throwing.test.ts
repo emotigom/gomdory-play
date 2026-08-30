@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { calculateThrow, nudgeAim } from './throwing';
+import { calculateThrow, clampAim, nudgeAim } from './throwing';
 
 describe('calculateThrow', () => {
   it('throws forward with a useful default impulse', () => {
@@ -22,5 +22,9 @@ describe('calculateThrow', () => {
       x: 180,
       y: -180,
     });
+  });
+
+  it('keeps drag aiming inside the supported range', () => {
+    expect(clampAim({ x: 300, y: -300 })).toEqual({ x: 180, y: -180 });
   });
 });

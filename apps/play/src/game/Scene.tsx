@@ -7,9 +7,13 @@ import {
   type RapierRigidBody,
 } from '@react-three/rapier';
 import { useEffect, useRef } from 'react';
-import type { Group } from 'three';
+import { Quaternion, Vector3, type Group } from 'three';
 
-import { decideRoundOutcome, type GameStatus } from './state';
+import {
+  calculateTiltRadians,
+  decideRoundOutcome,
+  type GameStatus,
+} from './state';
 import type { ThrowVector } from './throwing';
 
 type DebugStats = Readonly<{
@@ -19,6 +23,7 @@ type DebugStats = Readonly<{
 }>;
 
 type SceneProps = Readonly<{
+  debug: boolean;
   onDebugStats: (stats: DebugStats) => void;
   onRoundFinished: (status: 'success' | 'failure') => void;
   status: GameStatus;
@@ -71,6 +76,8 @@ function RoundWatcher({
 }) {
   const elapsed = useRef(0);
   const finished = useRef(false);
+  const targetRotation = useRef(new Quaternion());
+  const targetUp = useRef(new Vector3());
 
   useEffect(() => {
     elapsed.current = 0;
@@ -89,7 +96,18 @@ function RoundWatcher({
 
     elapsed.current += delta;
     const rotation = target.current.rotation();
-    const tilt = 2 * Math.acos(Math.min(1, Math.abs(rotation.w)));
+    const tilt = calculateTiltRadians(
+      targetUp.current
+        .set(0, 1, 0)
+        .applyQuaternion(
+          targetRotation.current.set(
+            rotation.x,
+            rotation.y,
+            rotation.z,
+            rotation.w,
+          ),
+        ),
+    );
     const outcome = decideRoundOutcome({
       elapsedSeconds: elapsed.current,
       stoneHeight: stone.current.translation().y,
@@ -213,6 +231,7 @@ function AlleyDetails() {
 }
 
 function World({
+  debug,
   onDebugStats,
   onRoundFinished,
   status,
@@ -249,7 +268,7 @@ function World({
         stone={stone}
         target={target}
       />
-      <DebugMonitor onDebugStats={onDebugStats} />
+      {debug ? <DebugMonitor onDebugStats={onDebugStats} /> : null}
     </>
   );
 }
