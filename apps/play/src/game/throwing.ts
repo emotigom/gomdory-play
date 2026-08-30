@@ -18,10 +18,8 @@ export function clampAim(aim: Aim): Aim {
   };
 }
 
-export function calculateThrow(aim: Aim): ThrowVector {
-  const distance = Math.hypot(aim.x, aim.y);
-  const cappedDistance = clamp(distance, 0, 180);
-  const strength = 7.8 + (cappedDistance / 180) * 3.4;
+export function calculateThrow(aim: Aim, power: number): ThrowVector {
+  const strength = power * 1.4;
   const sideways = clamp(aim.x / 180, -0.55, 0.55);
   const lift = 0.28 + clamp(-aim.y / 180, -0.12, 0.42);
   const forward = Math.sqrt(Math.max(0.2, 1 - sideways ** 2));
