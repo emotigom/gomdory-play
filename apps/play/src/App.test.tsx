@@ -3,21 +3,47 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
 
+const sceneCallbacks = vi.hoisted(() => ({
+  flying: null as ((status: 'success' | 'failure') => void) | null,
+}));
+
 vi.mock('./game/Scene', () => ({
   BiseokScene: ({
+    onRoundFinished,
     status,
     throwVector,
   }: {
+    onRoundFinished: (status: 'success' | 'failure') => void;
     status: string;
     throwVector: { strength: number };
-  }) => (
-    <output data-strength={throwVector.strength} data-testid="scene-status">
-      {status}
-    </output>
-  ),
+  }) => {
+    if (status === 'flying') {
+      sceneCallbacks.flying = onRoundFinished;
+    }
+
+    return (
+      <>
+        <output data-strength={throwVector.strength} data-testid="scene-status">
+          {status}
+        </output>
+        <button onClick={() => onRoundFinished('failure')} type="button">
+          던지기 종료
+        </button>
+        <button
+          onClick={() => sceneCallbacks.flying?.('failure')}
+          type="button"
+        >
+          지연된 던지기 종료
+        </button>
+      </>
+    );
+  },
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  sceneCallbacks.flying = null;
+});
 
 describe('App', () => {
   it('shows a short WebGL notice when the browser cannot create a context', () => {
@@ -119,6 +145,59 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
     expect(screen.getByTestId('scene-status')).toHaveTextContent('ready');
     expect(editor).toHaveValue('biseok.throw({ power: 9 });');
+
+    getContext.mockRestore();
+  });
+
+  it('records only finished throws and preserves the first mission progress on reset', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    expect(editor).toHaveValue('biseok.throw({ power: 3 });');
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('0 / 2')).toBeInTheDocument();
+
+    fireEvent.change(editor, { target: { value: 'const power = 3;' } });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('0 / 2')).toBeInTheDocument();
+
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 3 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    expect(screen.getByText('0 / 2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    fireEvent.click(screen.getByRole('button', { name: '지연된 던지기 종료' }));
+    expect(screen.getByText('0 / 2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('1 / 2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    expect(editor).toHaveValue('biseok.throw({ power: 3 });');
+    expect(screen.getByText('1 / 2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('숫자를 조금 더 바꿔 보세요.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 9 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('완료')).toBeInTheDocument();
 
     getContext.mockRestore();
   });

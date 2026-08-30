@@ -2,12 +2,17 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PointerEvent,
 } from 'react';
 
 import './App.css';
 import { BiseokScene } from './game/Scene';
+import {
+  initialFirstPowerMissionState,
+  recordCompletedThrow,
+} from './game/firstPowerMission';
 import {
   initialGameState,
   transitionGame,
@@ -21,7 +26,7 @@ import {
 import { clampAim, calculateThrow, nudgeAim, type Aim } from './game/throwing';
 
 const keyboardStep = 28;
-const starterCode = 'biseok.throw({ power: 7 });';
+const starterCode = 'biseok.throw({ power: 3 });';
 
 type AimDrag = Readonly<{
   aim: Aim;
@@ -67,6 +72,8 @@ function codeErrorMessage(error: StudentCodeError) {
 export function App() {
   const [webglAvailable] = useState(supportsWebGL);
   const [game, setGame] = useState(initialGameState);
+  const gameRef = useRef(initialGameState);
+  const [mission, setMission] = useState(initialFirstPowerMissionState);
   const [aim, setAim] = useState<Aim>({ x: 0, y: 0 });
   const [code, setCode] = useState(starterCode);
   const [codeError, setCodeError] = useState<StudentCodeError | null>(null);
@@ -85,7 +92,7 @@ export function App() {
   );
 
   const throwRound = useCallback(() => {
-    if (game.status !== 'ready') {
+    if (gameRef.current.status !== 'ready') {
       return;
     }
 
@@ -97,8 +104,10 @@ export function App() {
 
     setCodeError(null);
     setThrowPower(result.command.power);
-    setGame((current) => transitionGame(current, { type: 'throw' }));
-  }, [code, game.status]);
+    const nextGame = transitionGame(gameRef.current, { type: 'throw' });
+    gameRef.current = nextGame;
+    setGame(nextGame);
+  }, [code]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -173,11 +182,29 @@ export function App() {
 
   const finishAim = () => setDragStart(null);
   const reset = () => {
-    setGame((current) => transitionGame(current, { type: 'reset' }));
+    const nextGame = transitionGame(gameRef.current, { type: 'reset' });
+    gameRef.current = nextGame;
+    setGame(nextGame);
     setAim({ x: 0, y: 0 });
     setDragStart(null);
     setCodeError(null);
     setDebugStats({ calls: 0, fps: 0, triangles: 0 });
+  };
+  const finishRound = (round: number, status: 'success' | 'failure') => {
+    if (
+      round !== gameRef.current.round ||
+      gameRef.current.status !== 'flying'
+    ) {
+      return;
+    }
+
+    const nextGame = transitionGame(gameRef.current, {
+      type: 'resolve',
+      status,
+    });
+    gameRef.current = nextGame;
+    setGame(nextGame);
+    setMission((current) => recordCompletedThrow(current, throwPower));
   };
   const dotPosition = {
     left: `${50 + aim.x / 4}%`,
@@ -192,11 +219,7 @@ export function App() {
             debug={debug}
             key={game.round}
             onDebugStats={setDebugStats}
-            onRoundFinished={(status) =>
-              setGame((current) =>
-                transitionGame(current, { type: 'resolve', status }),
-              )
-            }
+            onRoundFinished={(status) => finishRound(game.round, status)}
             status={game.status}
             throwVector={throwVector}
           />
@@ -219,6 +242,16 @@ export function App() {
             <h2>이번 판 규칙</h2>
             <p className="rule">조준은 방향, power는 힘이에요.</p>
           </div>
+          <section aria-live="polite" className="first-mission">
+            <h2>첫 미션</h2>
+            <p>power를 바꿔 두 번 던져 보세요.</p>
+            <strong>
+              {mission.step === 2 ? '완료' : `${mission.step} / 2`}
+            </strong>
+            {mission.needsDifferentPowerHint ? (
+              <p>숫자를 조금 더 바꿔 보세요.</p>
+            ) : null}
+          </section>
           <p className="status" aria-live="polite">
             {statusMessage(game.status)}
           </p>

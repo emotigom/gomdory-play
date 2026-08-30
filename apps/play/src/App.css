@@ -84,6 +84,26 @@ h2 {
   line-height: 1.5;
 }
 
+.first-mission {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border-left: 3px solid #8d775f;
+  background: #f0e7d8;
+  color: #63564c;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.first-mission h2 {
+  font-size: 0.9rem;
+}
+
+.first-mission strong {
+  color: #45372f;
+  font-size: 0.9rem;
+}
+
 .status {
   min-height: 3em;
   padding: 10px 12px;
