@@ -7,9 +7,15 @@ import {
   transitionGame,
   type GameStatus,
 } from './game/state';
-import { calculateThrow, nudgeAim, type Aim } from './game/throwing';
+import { clampAim, calculateThrow, nudgeAim, type Aim } from './game/throwing';
 
 const keyboardStep = 28;
+
+type AimDrag = Readonly<{
+  aim: Aim;
+  clientX: number;
+  clientY: number;
+}>;
 
 function supportsWebGL() {
   try {
@@ -37,7 +43,7 @@ export function App() {
   const [webglAvailable] = useState(supportsWebGL);
   const [game, setGame] = useState(initialGameState);
   const [aim, setAim] = useState<Aim>({ x: 0, y: 0 });
-  const [dragStart, setDragStart] = useState<Aim | null>(null);
+  const [dragStart, setDragStart] = useState<AimDrag | null>(null);
   const [debugStats, setDebugStats] = useState({
     calls: 0,
     fps: 0,
@@ -51,6 +57,9 @@ export function App() {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === ' ' || event.key === 'Enter') {
         event.preventDefault();
+        if (event.repeat) {
+          return;
+        }
         setGame((current) => transitionGame(current, { type: 'throw' }));
         return;
       }
@@ -65,13 +74,15 @@ export function App() {
 
       if (delta) {
         event.preventDefault();
-        setAim((current) => nudgeAim(current, delta));
+        if (game.status === 'ready') {
+          setAim((current) => nudgeAim(current, delta));
+        }
       }
     }
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [game.status]);
 
   if (!webglAvailable) {
     return (
@@ -85,24 +96,40 @@ export function App() {
   }
 
   const startAim = (event: PointerEvent<HTMLDivElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDragStart({ x: event.clientX, y: event.clientY });
+    if (game.status !== 'ready') {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDragStart({
+      aim,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
   };
 
   const moveAim = (event: PointerEvent<HTMLDivElement>) => {
-    if (!dragStart) {
+    if (!dragStart || game.status !== 'ready') {
       return;
     }
-    setAim({
-      x: Math.max(-180, Math.min(180, event.clientX - dragStart.x)),
-      y: Math.max(-180, Math.min(180, event.clientY - dragStart.y)),
-    });
+    setAim(
+      clampAim({
+        x: dragStart.aim.x + event.clientX - dragStart.clientX,
+        y: dragStart.aim.y + event.clientY - dragStart.clientY,
+      }),
+    );
+  };
+
+  const throwRound = () => {
+    setGame((current) => transitionGame(current, { type: 'throw' }));
   };
 
   const finishAim = () => setDragStart(null);
   const reset = () => {
     setGame((current) => transitionGame(current, { type: 'reset' }));
     setAim({ x: 0, y: 0 });
+    setDragStart(null);
+    setDebugStats({ calls: 0, fps: 0, triangles: 0 });
   };
   const dotPosition = {
     left: `${50 + aim.x / 4}%`,
@@ -114,6 +141,7 @@ export function App() {
       <section className="game-card" aria-label="비석치기 시제품">
         <div className="scene-wrap">
           <BiseokScene
+            debug={debug}
             key={game.round}
             onDebugStats={setDebugStats}
             onRoundFinished={(status) =>
@@ -144,26 +172,26 @@ export function App() {
             {statusMessage(game.status)}
           </p>
           <div
-            aria-label="던지는 방향"
+            aria-describedby="aim-instructions"
+            aria-label="던지는 방향 조준"
             className="aim-pad"
             onPointerCancel={finishAim}
             onPointerDown={startAim}
             onPointerMove={moveAim}
             onPointerUp={finishAim}
-            role="application"
+            tabIndex={0}
           >
-            <div className="aim-dot" style={dotPosition} />
+            <div aria-hidden="true" className="aim-dot" style={dotPosition} />
           </div>
-          <p className="control-help">
-            화살표로 방향 · Enter 또는 Space로 던지기
+          <p className="control-help" id="aim-instructions">
+            조준 원을 클릭하거나 탭한 뒤 드래그하세요. 화살표로 방향을 조절하고
+            Enter 또는 Space로 던집니다.
           </p>
           <div className="button-row">
             <button
               className="primary-button"
               disabled={game.status !== 'ready'}
-              onClick={() =>
-                setGame((current) => transitionGame(current, { type: 'throw' }))
-              }
+              onClick={throwRound}
               type="button"
             >
               한 번 던져 보기

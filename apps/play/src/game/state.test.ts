@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { decideRoundOutcome, initialGameState, transitionGame } from './state';
+import { Quaternion, Vector3 } from 'three';
+
+import {
+  calculateTiltRadians,
+  decideRoundOutcome,
+  initialGameState,
+  transitionGame,
+} from './state';
 
 describe('game state transitions', () => {
   it('moves from ready to flying and then success', () => {
@@ -26,14 +33,49 @@ describe('game state transitions', () => {
 });
 
 describe('round outcome', () => {
-  it('succeeds when the target biseok has fallen far enough', () => {
+  it('does not count a 90 degree yaw as a fallen biseok', () => {
+    const targetUp = new Vector3(0, 1, 0).applyQuaternion(
+      new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2),
+    );
+
+    expect(calculateTiltRadians(targetUp)).toBeCloseTo(0);
     expect(
       decideRoundOutcome({
         elapsedSeconds: 1,
         stoneHeight: 0.3,
-        targetTiltRadians: 0.6,
+        targetTiltRadians: calculateTiltRadians(targetUp),
       }),
-    ).toBe('success');
+    ).toBeNull();
+  });
+
+  it.each([
+    { x: Math.sin(0.6), y: Math.cos(0.6), z: 0 },
+    { x: 0, y: Math.cos(0.6), z: Math.sin(0.6) },
+  ])(
+    'succeeds when the biseok falls past the x/z tilt threshold',
+    (targetUp) => {
+      expect(
+        decideRoundOutcome({
+          elapsedSeconds: 1,
+          stoneHeight: 0.3,
+          targetTiltRadians: calculateTiltRadians(targetUp),
+        }),
+      ).toBe('success');
+    },
+  );
+
+  it('does not succeed below the tilt threshold', () => {
+    expect(
+      decideRoundOutcome({
+        elapsedSeconds: 1,
+        stoneHeight: 0.3,
+        targetTiltRadians: calculateTiltRadians({
+          x: Math.sin(0.57),
+          y: Math.cos(0.57),
+          z: 0,
+        }),
+      }),
+    ).toBeNull();
   });
 
   it('fails after the stone leaves the ground or the round times out', () => {

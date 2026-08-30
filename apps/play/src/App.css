@@ -116,6 +116,7 @@ h2 {
 }
 
 .aim-pad {
+  position: relative;
   width: min(164px, 100%);
   aspect-ratio: 1;
   touch-action: none;
@@ -127,12 +128,18 @@ h2 {
 }
 
 .aim-dot {
+  position: absolute;
   width: 24px;
   height: 24px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: #754b37;
   box-shadow: 0 1px 4px rgb(0 0 0 / 28%);
+}
+
+.aim-pad:focus-visible {
+  outline: 3px solid #3c6a7d;
+  outline-offset: 3px;
 }
 
 .control-help {

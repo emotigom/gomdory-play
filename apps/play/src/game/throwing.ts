@@ -11,6 +11,13 @@ export type ThrowVector = Readonly<{
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(Math.max(value, minimum), maximum);
 
+export function clampAim(aim: Aim): Aim {
+  return {
+    x: clamp(aim.x, -180, 180),
+    y: clamp(aim.y, -180, 180),
+  };
+}
+
 export function calculateThrow(aim: Aim): ThrowVector {
   const distance = Math.hypot(aim.x, aim.y);
   const cappedDistance = clamp(distance, 0, 180);
@@ -30,8 +37,8 @@ export function calculateThrow(aim: Aim): ThrowVector {
 }
 
 export function nudgeAim(aim: Aim, direction: Aim): Aim {
-  return {
-    x: clamp(aim.x + direction.x, -180, 180),
-    y: clamp(aim.y + direction.y, -180, 180),
-  };
+  return clampAim({
+    x: aim.x + direction.x,
+    y: aim.y + direction.y,
+  });
 }
