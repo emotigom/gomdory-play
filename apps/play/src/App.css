@@ -65,6 +65,12 @@ p {
 h1 {
   font-size: clamp(1.45rem, 2vw, 1.9rem);
   line-height: 1.25;
+  word-break: keep-all;
+}
+
+.title-line {
+  display: block;
+  white-space: nowrap;
 }
 
 h2 {
@@ -230,5 +236,38 @@ h2 {
 
   .aim-pad {
     width: 118px;
+  }
+}
+
+@media (min-width: 721px) and (max-height: 800px) {
+  .game-shell {
+    padding: 12px;
+  }
+
+  .game-card {
+    min-height: calc(100dvh - 24px);
+  }
+
+  .panel {
+    gap: 10px;
+    padding: 18px;
+  }
+
+  .status {
+    min-height: 0;
+    padding: 8px 10px;
+  }
+
+  .aim-pad {
+    width: 118px;
+  }
+
+  .code-editor textarea {
+    min-height: 64px;
+  }
+
+  .primary-button,
+  .secondary-button {
+    min-height: 40px;
   }
 }

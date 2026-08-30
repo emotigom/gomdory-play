@@ -10,12 +10,14 @@ import {
   type Property,
 } from 'acorn';
 
+export const MAX_SHARED_STUDENT_CODE_LENGTH = 256;
+
 export type ThrowCommand = Readonly<{
   kind: 'throw';
   power: number;
 }>;
 
-export type StudentCodeError = 'syntax' | 'statement' | 'power';
+export type StudentCodeError = 'length' | 'syntax' | 'statement' | 'power';
 
 export type StudentCodeResult =
   | Readonly<{ ok: true; command: ThrowCommand }>
@@ -91,6 +93,10 @@ function getOnlyStatement(program: Program): ExpressionStatement | null {
 }
 
 export function compileStudentCode(source: string): StudentCodeResult {
+  if (source.length > MAX_SHARED_STUDENT_CODE_LENGTH) {
+    return { ok: false, error: 'length' };
+  }
+
   let program: Program;
 
   try {
