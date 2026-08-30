@@ -9,14 +9,18 @@
     "build": "tsc -b && vite build"
   },
   "dependencies": {
+    "@react-three/fiber": "^9.7.0",
+    "@react-three/rapier": "^2.2.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
+    "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "6.1.1",
     "jsdom": "30.0.1",
     "vite": "8.2.2",
