@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileStudentCode } from './studentCode';
+import {
+  compileStudentCode,
+  MAX_SHARED_STUDENT_CODE_LENGTH,
+} from './studentCode';
 
 describe('compileStudentCode', () => {
   it('converts the allowed throw statement into a command', () => {
@@ -14,6 +17,24 @@ describe('compileStudentCode', () => {
     expect(
       compileStudentCode('\n biseok . throw ( { power : 3.5 } ) ; \n'),
     ).toEqual({ ok: true, command: { kind: 'throw', power: 3.5 } });
+  });
+
+  it('accepts code at the shared length limit', () => {
+    const source = 'biseok.throw({ power: 7 });'.padEnd(
+      MAX_SHARED_STUDENT_CODE_LENGTH,
+    );
+
+    expect(source).toHaveLength(MAX_SHARED_STUDENT_CODE_LENGTH);
+    expect(compileStudentCode(source)).toEqual({
+      ok: true,
+      command: { kind: 'throw', power: 7 },
+    });
+  });
+
+  it('rejects code over the shared length limit before parsing', () => {
+    const source = '('.repeat(MAX_SHARED_STUDENT_CODE_LENGTH + 1);
+
+    expect(compileStudentCode(source)).toEqual({ ok: false, error: 'length' });
   });
 
   it.each([0, 0.5, 10.5, 11])('rejects power outside 1 to 10: %s', (power) => {

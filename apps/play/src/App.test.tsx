@@ -96,6 +96,7 @@ describe('App', () => {
     render(<App />);
 
     const editor = screen.getByLabelText('돌 던지는 코드');
+    expect(editor).toHaveAttribute('maxlength', '256');
     fireEvent.change(editor, { target: { value: 'const power = 9;' } });
     fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
 

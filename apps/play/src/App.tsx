@@ -13,7 +13,11 @@ import {
   transitionGame,
   type GameStatus,
 } from './game/state';
-import { compileStudentCode, type StudentCodeError } from './game/studentCode';
+import {
+  compileStudentCode,
+  MAX_SHARED_STUDENT_CODE_LENGTH,
+  type StudentCodeError,
+} from './game/studentCode';
 import { clampAim, calculateThrow, nudgeAim, type Aim } from './game/throwing';
 
 const keyboardStep = 28;
@@ -49,6 +53,8 @@ function statusMessage(status: GameStatus) {
 
 function codeErrorMessage(error: StudentCodeError) {
   switch (error) {
+    case 'length':
+      return '코드가 너무 길어요. 한 줄만 남겨요.';
     case 'syntax':
       return '괄호나 따옴표를 확인해요.';
     case 'power':
@@ -203,7 +209,10 @@ export function App() {
         </div>
         <aside className="panel">
           <div>
-            <h1>골목 199X — 비석치기</h1>
+            <h1>
+              <span className="title-line">골목 199X —</span>
+              <span className="title-line">비석치기</span>
+            </h1>
             <p className="rule">선을 넘지 않고 비석을 쓰러뜨려 보세요.</p>
           </div>
           <div>
@@ -238,6 +247,7 @@ export function App() {
               autoComplete="off"
               autoCorrect="off"
               id="throw-code"
+              maxLength={MAX_SHARED_STUDENT_CODE_LENGTH}
               onChange={(event) => {
                 setCode(event.target.value);
                 setCodeError(null);
