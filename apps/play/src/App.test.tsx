@@ -128,7 +128,7 @@ describe('App', () => {
 
     expect(screen.getByTestId('scene-status')).toHaveTextContent('ready');
     expect(screen.getByRole('alert')).toHaveTextContent(
-      '이 줄을 biseok.throw({ power: 숫자 });로 고쳐요.',
+      '허용된 던지기 코드 형식으로 고쳐요.',
     );
 
     fireEvent.change(editor, {
@@ -199,6 +199,95 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
     expect(screen.getByText('완료')).toBeInTheDocument();
 
+    getContext.mockRestore();
+  });
+
+  it('unlocks and completes the const power mission only from a finished variable round', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    expect(
+      screen.queryByRole('button', { name: '다음 미션' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 9 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 미션' }));
+    expect(
+      screen.getByRole('heading', { name: '두 번째 미션' }),
+    ).toBeInTheDocument();
+    expect(editor).toHaveValue('const power = 3;\nbiseok.throw({ power });');
+    expect(screen.getByText('준비')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('power의 숫자를 바꿔 보세요.')).toBeInTheDocument();
+    expect(screen.getByText('준비')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 7 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('준비')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.change(editor, {
+      target: { value: 'const power = 7;\nbiseok.throw({ power });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('완료')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.change(editor, {
+      target: { value: 'const power = 3;\nbiseok.throw({ power });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('완료')).toBeInTheDocument();
+
+    getContext.mockRestore();
+  });
+
+  it('does not advance the second mission from a reset round callback', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 9 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    fireEvent.click(screen.getByRole('button', { name: '다음 미션' }));
+
+    fireEvent.change(editor, {
+      target: { value: 'const power = 7;\nbiseok.throw({ power });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.click(screen.getByRole('button', { name: '지연된 던지기 종료' }));
+
+    expect(screen.getByText('준비')).toBeInTheDocument();
     getContext.mockRestore();
   });
 });
