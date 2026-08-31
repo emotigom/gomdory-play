@@ -1,7 +1,8 @@
 import type { FirstPowerMissionState } from './firstPowerMission';
 import type { SecondPowerMissionState } from './secondPowerMission';
+import type { ThirdPowerMissionState } from './thirdPowerMission';
 
-export type CurrentMission = 'first' | 'second' | 'third';
+export type CurrentMission = 'first' | 'second' | 'third' | 'fourth';
 
 export const initialCurrentMission: CurrentMission = 'first';
 
@@ -20,5 +21,14 @@ export function moveToThirdMission(
 ): CurrentMission {
   return currentMission === 'second' && secondMission.completed
     ? 'third'
+    : currentMission;
+}
+
+export function moveToFourthMission(
+  currentMission: CurrentMission,
+  thirdMission: ThirdPowerMissionState,
+): CurrentMission {
+  return currentMission === 'third' && thirdMission.completed
+    ? 'fourth'
     : currentMission;
 }

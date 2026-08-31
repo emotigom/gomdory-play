@@ -15,10 +15,15 @@ import {
 } from './game/firstPowerMission';
 import {
   initialCurrentMission,
+  moveToFourthMission,
   moveToSecondMission,
   moveToThirdMission,
   type CurrentMission,
 } from './game/currentMission';
+import {
+  initialFourthAngleMissionState,
+  recordFourthAngleMissionThrow,
+} from './game/fourthAngleMission';
 import {
   initialSecondPowerMissionState,
   recordSecondPowerMissionThrow,
@@ -45,6 +50,7 @@ const starterCode = 'biseok.throw({ power: 3 });';
 const secondMissionStarterCode = 'const power = 3;\nbiseok.throw({ power });';
 const thirdMissionStarterCode =
   'const power = 3 + 0;\nbiseok.throw({ power });';
+const fourthMissionStarterCode = 'biseok.throw({ power: 7, angle: 10 });';
 
 type AimDrag = Readonly<{
   aim: Aim;
@@ -53,6 +59,7 @@ type AimDrag = Readonly<{
 }>;
 
 type RoundCommand = Readonly<{
+  angleDegrees?: number;
   form: ThrowCodeForm;
   mission: CurrentMission;
   power: number;
@@ -83,6 +90,8 @@ function statusMessage(status: GameStatus) {
 
 function codeErrorMessage(error: StudentCodeError) {
   switch (error) {
+    case 'angle':
+      return 'angle을 5에서 45로 고쳐요.';
     case 'length':
       return '코드가 너무 길어요. 한 줄만 남겨요.';
     case 'syntax':
@@ -112,10 +121,16 @@ export function App() {
   const [thirdMission, setThirdMission] = useState(
     initialThirdPowerMissionState,
   );
+  const [fourthMission, setFourthMission] = useState(
+    initialFourthAngleMissionState,
+  );
   const [aim, setAim] = useState<Aim>({ x: 0, y: 0 });
   const [code, setCode] = useState(starterCode);
   const [codeError, setCodeError] = useState<StudentCodeError | null>(null);
   const [throwPower, setThrowPower] = useState(7);
+  const [throwAngleDegrees, setThrowAngleDegrees] = useState<
+    number | undefined
+  >(undefined);
   const [dragStart, setDragStart] = useState<AimDrag | null>(null);
   const [debugStats, setDebugStats] = useState({
     calls: 0,
@@ -125,8 +140,8 @@ export function App() {
   const debug =
     new URLSearchParams(window.location.search).get('debug') === '1';
   const throwVector = useMemo(
-    () => calculateThrow(aim, throwPower),
-    [aim, throwPower],
+    () => calculateThrow(aim, throwPower, throwAngleDegrees),
+    [aim, throwAngleDegrees, throwPower],
   );
 
   const throwRound = useCallback(() => {
@@ -142,7 +157,9 @@ export function App() {
 
     setCodeError(null);
     setThrowPower(result.command.power);
+    setThrowAngleDegrees(result.command.angleDegrees);
     roundCommandRef.current = {
+      angleDegrees: result.command.angleDegrees,
       form: result.form,
       mission: currentMissionRef.current,
       power: result.command.power,
@@ -168,11 +185,23 @@ export function App() {
         return;
       }
 
+      if (
+        currentMission === 'fourth' &&
+        (event.key === 'ArrowDown' || event.key === 'ArrowUp')
+      ) {
+        event.preventDefault();
+        return;
+      }
+
       const deltaByKey: Record<string, Aim> = {
-        ArrowDown: { x: 0, y: keyboardStep },
+        ...(currentMission === 'fourth'
+          ? {}
+          : {
+              ArrowDown: { x: 0, y: keyboardStep },
+              ArrowUp: { x: 0, y: -keyboardStep },
+            }),
         ArrowLeft: { x: -keyboardStep, y: 0 },
         ArrowRight: { x: keyboardStep, y: 0 },
-        ArrowUp: { x: 0, y: -keyboardStep },
       };
       const delta = deltaByKey[event.key];
 
@@ -186,7 +215,7 @@ export function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [game.status, throwRound]);
+  }, [currentMission, game.status, throwRound]);
 
   if (!webglAvailable) {
     return (
@@ -219,7 +248,10 @@ export function App() {
     setAim(
       clampAim({
         x: dragStart.aim.x + event.clientX - dragStart.clientX,
-        y: dragStart.aim.y + event.clientY - dragStart.clientY,
+        y:
+          currentMission === 'fourth'
+            ? 0
+            : dragStart.aim.y + event.clientY - dragStart.clientY,
       }),
     );
   };
@@ -266,6 +298,21 @@ export function App() {
     setCode(thirdMissionStarterCode);
     resetRound();
   };
+  const startFourthMission = () => {
+    const nextMission = moveToFourthMission(
+      currentMissionRef.current,
+      thirdMission,
+    );
+    if (nextMission !== 'fourth') {
+      return;
+    }
+
+    currentMissionRef.current = nextMission;
+    setCurrentMission(nextMission);
+    setFourthMission(initialFourthAngleMissionState);
+    setCode(fourthMissionStarterCode);
+    resetRound();
+  };
   const finishRound = (round: number, status: 'success' | 'failure') => {
     const roundCommand = roundCommandRef.current;
     if (
@@ -292,9 +339,13 @@ export function App() {
       setSecondMission((current) =>
         recordSecondPowerMissionThrow(current, roundCommand),
       );
-    } else {
+    } else if (roundCommand.mission === 'third') {
       setThirdMission((current) =>
         recordThirdPowerMissionThrow(current, roundCommand),
+      );
+    } else {
+      setFourthMission((current) =>
+        recordFourthAngleMissionThrow(current, roundCommand),
       );
     }
   };
@@ -332,7 +383,11 @@ export function App() {
           </div>
           <div>
             <h2>이번 판 규칙</h2>
-            <p className="rule">조준은 방향, power는 힘이에요.</p>
+            <p className="rule">
+              {currentMission === 'fourth'
+                ? '조준 원은 좌우, angle은 높이예요.'
+                : '조준은 방향, power는 힘이에요.'}
+            </p>
           </div>
           {currentMission === 'first' ? (
             <section aria-live="polite" className="mission-card">
@@ -354,7 +409,7 @@ export function App() {
                 <p>power의 숫자를 바꿔 보세요.</p>
               ) : null}
             </section>
-          ) : (
+          ) : currentMission === 'third' ? (
             <section aria-live="polite" className="mission-card">
               <h2>세 번째 미션</h2>
               <p>더하기 식으로 power를 5 이상 만들어 보세요.</p>
@@ -364,6 +419,18 @@ export function App() {
               ) : null}
               {thirdMission.needsExpressionHint ? (
                 <p>더하기 식을 사용해 보세요.</p>
+              ) : null}
+            </section>
+          ) : (
+            <section aria-live="polite" className="mission-card">
+              <h2>네 번째 미션</h2>
+              <p>angle을 바꿔 돌을 더 높이 띄워 보세요.</p>
+              <strong>{fourthMission.completed ? '완료' : '준비'}</strong>
+              {fourthMission.needsHigherAngleHint ? (
+                <p>angle을 25 이상으로 바꿔 보세요.</p>
+              ) : null}
+              {fourthMission.needsAngleCodeHint ? (
+                <p>angle이 있는 코드를 사용해 보세요.</p>
               ) : null}
             </section>
           )}
@@ -383,7 +450,9 @@ export function App() {
             <div aria-hidden="true" className="aim-dot" style={dotPosition} />
           </div>
           <p className="control-help" id="aim-instructions">
-            조준 원을 드래그하거나 화살표로 방향을 정해요.
+            {currentMission === 'fourth'
+              ? '조준 원은 좌우, angle은 높이예요.'
+              : '조준 원을 드래그하거나 화살표로 방향을 정해요.'}
           </p>
           <div className="code-editor">
             <label htmlFor="throw-code">돌 던지는 코드</label>
@@ -404,7 +473,9 @@ export function App() {
               value={code}
             />
             <p className="control-help" id="code-help">
-              power를 1부터 10까지 바꿔 보세요.
+              {currentMission === 'fourth'
+                ? 'power는 1부터 10, angle은 5부터 45까지 바꿔 보세요.'
+                : 'power를 1부터 10까지 바꿔 보세요.'}
             </p>
             {codeError ? (
               <p className="code-error" id="code-error" role="alert">
@@ -437,6 +508,15 @@ export function App() {
               <button
                 className="secondary-button"
                 onClick={startThirdMission}
+                type="button"
+              >
+                다음 미션
+              </button>
+            ) : null}
+            {currentMission === 'third' && thirdMission.completed ? (
+              <button
+                className="secondary-button"
+                onClick={startFourthMission}
                 type="button"
               >
                 다음 미션

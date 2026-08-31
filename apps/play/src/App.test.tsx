@@ -15,7 +15,10 @@ vi.mock('./game/Scene', () => ({
   }: {
     onRoundFinished: (status: 'success' | 'failure') => void;
     status: string;
-    throwVector: { strength: number };
+    throwVector: {
+      impulse: { x: number; y: number; z: number };
+      strength: number;
+    };
   }) => {
     if (status === 'flying') {
       sceneCallbacks.flying = onRoundFinished;
@@ -23,7 +26,13 @@ vi.mock('./game/Scene', () => ({
 
     return (
       <>
-        <output data-strength={throwVector.strength} data-testid="scene-status">
+        <output
+          data-impulse-x={throwVector.impulse.x}
+          data-impulse-y={throwVector.impulse.y}
+          data-impulse-z={throwVector.impulse.z}
+          data-strength={throwVector.strength}
+          data-testid="scene-status"
+        >
           {status}
         </output>
         <button onClick={() => onRoundFinished('failure')} type="button">
@@ -61,6 +70,18 @@ function moveToThirdMission(editor: HTMLElement) {
   completeFirstMission(editor);
   fireEvent.change(editor, {
     target: { value: 'const power = 7;\nbiseok.throw({ power });' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+  fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+  fireEvent.click(screen.getByRole('button', { name: '다음 미션' }));
+}
+
+function moveToFourthMission(editor: HTMLElement) {
+  moveToThirdMission(editor);
+  fireEvent.change(editor, {
+    target: {
+      value: 'const power = 3 + 4;\nbiseok.throw({ power });',
+    },
   });
   fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
   fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
@@ -106,6 +127,36 @@ describe('App', () => {
 
     expect(aimPad).toHaveAttribute('tabindex', '0');
     expect(aimPad).toHaveAttribute('aria-describedby', 'aim-instructions');
+
+    getContext.mockRestore();
+  });
+
+  it('keeps vertical keyboard aiming in each of the first three missions', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    const aimPad = screen.getByLabelText('던지는 방향 조준');
+    const aimDot = aimPad.firstElementChild as HTMLDivElement;
+
+    fireEvent.keyDown(window, { key: 'ArrowUp' });
+    expect(aimDot).toHaveStyle({ top: '43%' });
+
+    completeFirstMission(editor);
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    expect(aimDot).toHaveStyle({ top: '57%' });
+
+    fireEvent.change(editor, {
+      target: { value: 'const power = 7;\nbiseok.throw({ power });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    fireEvent.click(screen.getByRole('button', { name: '다음 미션' }));
+    fireEvent.keyDown(window, { key: 'ArrowUp' });
+    expect(aimDot).toHaveStyle({ top: '43%' });
 
     getContext.mockRestore();
   });
@@ -167,6 +218,27 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
     expect(screen.getByTestId('scene-status')).toHaveTextContent('ready');
     expect(editor).toHaveValue('biseok.throw({ power: 9 });');
+
+    getContext.mockRestore();
+  });
+
+  it('shows a separate natural error for an angle outside its range', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 7, angle: 46 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'angle을 5에서 45로 고쳐요.',
+    );
+    expect(screen.getByTestId('scene-status')).toHaveTextContent('ready');
 
     getContext.mockRestore();
   });
@@ -424,6 +496,170 @@ describe('App', () => {
     moveToThirdMission(editor);
     fireEvent.change(editor, {
       target: { value: 'const power = 3 + 4;\nbiseok.throw({ power });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.click(screen.getByRole('button', { name: '지연된 던지기 종료' }));
+    expect(screen.getByText('준비')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    fireEvent.click(screen.getByRole('button', { name: '지연된 던지기 종료' }));
+    expect(screen.getByText('완료')).toBeInTheDocument();
+
+    getContext.mockRestore();
+  });
+
+  it('unlocks the fourth mission only after the third mission is complete', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    moveToThirdMission(editor);
+    expect(
+      screen.queryByRole('button', { name: '다음 미션' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(editor, {
+      target: {
+        value: 'const power = 3 + 4;\nbiseok.throw({ power });',
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    fireEvent.click(screen.getByRole('button', { name: '다음 미션' }));
+
+    expect(
+      screen.getByRole('heading', { name: '네 번째 미션' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('angle을 바꿔 돌을 더 높이 띄워 보세요.'),
+    ).toBeInTheDocument();
+    expect(editor).toHaveValue('biseok.throw({ power: 7, angle: 10 });');
+    expect(screen.getByText('준비')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '다음 미션' }),
+    ).not.toBeInTheDocument();
+
+    getContext.mockRestore();
+  });
+
+  it('locks vertical aiming only in the fourth mission and keeps horizontal aiming', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    moveToFourthMission(editor);
+    const aimPad = screen.getByLabelText('던지는 방향 조준');
+    const aimDot = aimPad.firstElementChild as HTMLDivElement;
+
+    fireEvent.keyDown(window, { key: 'ArrowUp' });
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    expect(aimDot).toHaveStyle({ left: '50%', top: '50%' });
+
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(aimDot).toHaveStyle({ left: '57%', top: '50%' });
+
+    fireEvent.pointerDown(aimPad, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(aimPad, {
+      pointerId: 1,
+      clientX: 252,
+      clientY: -100,
+    });
+    expect(aimDot).toHaveStyle({ left: '95%', top: '50%' });
+    expect(
+      screen.getAllByText('조준 원은 좌우, angle은 높이예요.'),
+    ).toHaveLength(2);
+
+    getContext.mockRestore();
+  });
+
+  it('uses the captured fourth-mission code when the round finishes', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    moveToFourthMission(editor);
+
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 7, angle: 35 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(
+      screen.getByText('angle을 25 이상으로 바꿔 보세요.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('준비')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 7, angle: 10 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('완료')).toBeInTheDocument();
+
+    getContext.mockRestore();
+  });
+
+  it('guides legacy code and keeps fourth-mission completion across reruns', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    moveToFourthMission(editor);
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 7 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(
+      screen.getByText('angle이 있는 코드를 사용해 보세요.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 7, angle: 25 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('완료')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 7, angle: 10 });' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
+    fireEvent.click(screen.getByRole('button', { name: '던지기 종료' }));
+    expect(screen.getByText('완료')).toBeInTheDocument();
+
+    getContext.mockRestore();
+  });
+
+  it('ignores reset, late, and duplicate callbacks in the fourth mission', () => {
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({} as RenderingContext);
+
+    render(<App />);
+
+    const editor = screen.getByLabelText('돌 던지는 코드');
+    moveToFourthMission(editor);
+    fireEvent.change(editor, {
+      target: { value: 'biseok.throw({ power: 7, angle: 35 });' },
     });
     fireEvent.click(screen.getByRole('button', { name: '코드로 던지기' }));
     fireEvent.click(screen.getByRole('button', { name: '다시 놓기' }));

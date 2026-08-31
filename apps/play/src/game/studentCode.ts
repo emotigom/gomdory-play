@@ -19,11 +19,14 @@ export const MAX_SHARED_STUDENT_CODE_LENGTH = 256;
 export type ThrowCommand = Readonly<{
   kind: 'throw';
   power: number;
+  angleDegrees?: number;
 }>;
 
-export type ThrowCodeForm = 'expression' | 'literal' | 'variable';
+export type ThrowCodeForm =
+  'expression' | 'literal' | 'trajectory' | 'variable';
 
-export type StudentCodeError = 'length' | 'syntax' | 'statement' | 'power';
+export type StudentCodeError =
+  'angle' | 'length' | 'syntax' | 'statement' | 'power';
 
 export type StudentCodeResult =
   | Readonly<{
@@ -91,6 +94,65 @@ function getPowerArgument(call: CallExpression): number | null {
   }
 
   return powerProperty.value.value;
+}
+
+type TrajectoryArgument = Readonly<{
+  angleDegrees: number;
+  power: number;
+}>;
+
+function getNumberProperty(property: Node, name: string): number | null {
+  if (property.type !== 'Property') {
+    return null;
+  }
+
+  const numberProperty = property as Property;
+  if (
+    numberProperty.computed ||
+    numberProperty.kind !== 'init' ||
+    numberProperty.method ||
+    numberProperty.shorthand ||
+    !isIdentifier(numberProperty.key, name) ||
+    numberProperty.value.type !== 'Literal' ||
+    typeof numberProperty.value.value !== 'number'
+  ) {
+    return null;
+  }
+
+  return numberProperty.value.value;
+}
+
+function getTrajectoryArgument(
+  call: CallExpression,
+): TrajectoryArgument | null {
+  const [argument] = call.arguments;
+
+  if (!argument || argument.type !== 'ObjectExpression') {
+    return null;
+  }
+
+  const object = argument as ObjectExpression;
+  if (object.properties.length !== 2) {
+    return null;
+  }
+
+  const [firstProperty, secondProperty] = object.properties;
+  if (!firstProperty || !secondProperty) {
+    return null;
+  }
+
+  const power =
+    getNumberProperty(firstProperty, 'power') ??
+    getNumberProperty(secondProperty, 'power');
+  const angleDegrees =
+    getNumberProperty(firstProperty, 'angle') ??
+    getNumberProperty(secondProperty, 'angle');
+
+  if (power === null || angleDegrees === null) {
+    return null;
+  }
+
+  return { angleDegrees, power };
 }
 
 function isShorthandPowerArgument(call: CallExpression): boolean {
@@ -219,11 +281,20 @@ export function compileStudentCode(source: string): StudentCodeResult {
     statement && isThrowCall(statement.expression)
       ? getPowerArgument(statement.expression)
       : null;
+  const trajectoryArgument =
+    statement && isThrowCall(statement.expression)
+      ? getTrajectoryArgument(statement.expression)
+      : null;
   let form: ThrowCodeForm;
   let power: number;
+  let angleDegrees: number | undefined;
   if (literalPower !== null) {
     form = 'literal';
     power = literalPower;
+  } else if (trajectoryArgument !== null) {
+    form = 'trajectory';
+    power = trajectoryArgument.power;
+    angleDegrees = trajectoryArgument.angleDegrees;
   } else {
     const declaredPower = getDeclaredPower(program);
     if (declaredPower === null) {
@@ -238,9 +309,19 @@ export function compileStudentCode(source: string): StudentCodeResult {
     return { ok: false, error: 'power' };
   }
 
+  if (
+    angleDegrees !== undefined &&
+    (!Number.isFinite(angleDegrees) || angleDegrees < 5 || angleDegrees > 45)
+  ) {
+    return { ok: false, error: 'angle' };
+  }
+
   return {
     ok: true,
-    command: { kind: 'throw', power },
+    command:
+      angleDegrees === undefined
+        ? { kind: 'throw', power }
+        : { kind: 'throw', power, angleDegrees },
     form,
   };
 }
