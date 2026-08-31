@@ -47,6 +47,59 @@ describe('compileStudentCode', () => {
     });
   });
 
+  it('adds two literal operands into an expression command', () => {
+    expect(
+      compileStudentCode('const power = 3 + 4;\nbiseok.throw({ power });'),
+    ).toEqual({
+      ok: true,
+      command: { kind: 'throw', power: 7 },
+      form: 'expression',
+    });
+  });
+
+  it('allows whitespace and line breaks in the expression form', () => {
+    expect(
+      compileStudentCode(
+        '\n const power\n =\n 2.5\n +\n 3.5 ;\n biseok . throw ( { power } ) ;\n',
+      ),
+    ).toEqual({
+      ok: true,
+      command: { kind: 'throw', power: 6 },
+      form: 'expression',
+    });
+  });
+
+  it.each([
+    { expression: '0.5 + 0.5', power: 1 },
+    { expression: '6 + 4', power: 10 },
+  ])(
+    'accepts expression power at the range boundary: $power',
+    ({ expression, power }) => {
+      expect(
+        compileStudentCode(
+          `const power = ${expression};\nbiseok.throw({ power });`,
+        ),
+      ).toEqual({
+        ok: true,
+        command: { kind: 'throw', power },
+        form: 'expression',
+      });
+    },
+  );
+
+  it('accepts expression code at the shared length limit', () => {
+    const source = 'const power = 3 + 4; biseok.throw({ power });'.padEnd(
+      MAX_SHARED_STUDENT_CODE_LENGTH,
+    );
+
+    expect(source).toHaveLength(MAX_SHARED_STUDENT_CODE_LENGTH);
+    expect(compileStudentCode(source)).toEqual({
+      ok: true,
+      command: { kind: 'throw', power: 7 },
+      form: 'expression',
+    });
+  });
+
   it.each([1, 10])(
     'accepts variable power at the range boundary: %s',
     (power) => {
@@ -72,6 +125,44 @@ describe('compileStudentCode', () => {
     ).toEqual({ ok: false, error: 'power' });
   });
 
+  it.each(['0 + 0', '10 + 0.5', '1e309 + 0'])(
+    'rejects expression results outside the finite 1 to 10 range: %s',
+    (expression) => {
+      expect(
+        compileStudentCode(
+          `const power = ${expression}; biseok.throw({ power });`,
+        ),
+      ).toEqual({ ok: false, error: 'power' });
+    },
+  );
+
+  it.each(['4 - 1', '2 * 3', '8 / 2', '7 % 4', '2 ** 3'])(
+    'rejects expression operator outside addition: %s',
+    (expression) => {
+      expect(
+        compileStudentCode(
+          `const power = ${expression}; biseok.throw({ power });`,
+        ),
+      ).toEqual({ ok: false, error: 'statement' });
+    },
+  );
+
+  it.each([
+    '"3" + 4',
+    'other + 4',
+    'getPower() + 4',
+    '+3 + 4',
+    '-3 + 4',
+    '1 + 2 + 3',
+    '1 + (2 + 3)',
+  ])('rejects disallowed expression operands: %s', (expression) => {
+    expect(
+      compileStudentCode(
+        `const power = ${expression}; biseok.throw({ power });`,
+      ),
+    ).toEqual({ ok: false, error: 'statement' });
+  });
+
   it.each(['NaN', 'Infinity', '1 / 0'])(
     'rejects non-finite power expressions: %s',
     (power) => {
@@ -90,7 +181,6 @@ describe('compileStudentCode', () => {
     'biseok.throw({ power: 7, extra: true });',
     'let power = 7; biseok.throw({ power });',
     'var power = 7; biseok.throw({ power });',
-    'const power = 3 + 4; biseok.throw({ power });',
     'const power = 7; power = 8; biseok.throw({ power });',
     'const power = 7, other = 8; biseok.throw({ power });',
     'const { power } = value; biseok.throw({ power });',

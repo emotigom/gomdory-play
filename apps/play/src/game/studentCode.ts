@@ -1,8 +1,10 @@
 import {
   parse,
+  type BinaryExpression,
   type CallExpression,
   type ExpressionStatement,
   type Identifier,
+  type Literal,
   type MemberExpression,
   type Node,
   type ObjectExpression,
@@ -19,7 +21,7 @@ export type ThrowCommand = Readonly<{
   power: number;
 }>;
 
-export type ThrowCodeForm = 'literal' | 'variable';
+export type ThrowCodeForm = 'expression' | 'literal' | 'variable';
 
 export type StudentCodeError = 'length' | 'syntax' | 'statement' | 'power';
 
@@ -128,7 +130,35 @@ function getOnlyStatement(program: Program): ExpressionStatement | null {
   return statement?.type === 'ExpressionStatement' ? statement : null;
 }
 
-function getVariablePower(program: Program): number | null {
+type DeclaredPower = Readonly<{
+  form: 'expression' | 'variable';
+  power: number;
+}>;
+
+function getExpressionPower(node: Node): number | null {
+  if (node.type !== 'BinaryExpression') {
+    return null;
+  }
+
+  const expression = node as BinaryExpression;
+  if (
+    expression.operator !== '+' ||
+    expression.left.type !== 'Literal' ||
+    expression.right.type !== 'Literal'
+  ) {
+    return null;
+  }
+
+  const left = expression.left as Literal;
+  const right = expression.right as Literal;
+  if (typeof left.value !== 'number' || typeof right.value !== 'number') {
+    return null;
+  }
+
+  return left.value + right.value;
+}
+
+function getDeclaredPower(program: Program): DeclaredPower | null {
   if (program.body.length !== 2) {
     return null;
   }
@@ -152,15 +182,23 @@ function getVariablePower(program: Program): number | null {
     !powerDeclaration ||
     !isIdentifier(powerDeclaration.id, 'power') ||
     !powerDeclaration.init ||
-    powerDeclaration.init.type !== 'Literal' ||
-    typeof powerDeclaration.init.value !== 'number' ||
     !isThrowCall(throwStatement.expression) ||
     !isShorthandPowerArgument(throwStatement.expression)
   ) {
     return null;
   }
 
-  return powerDeclaration.init.value;
+  if (
+    powerDeclaration.init.type === 'Literal' &&
+    typeof powerDeclaration.init.value === 'number'
+  ) {
+    return { form: 'variable', power: powerDeclaration.init.value };
+  }
+
+  const expressionPower = getExpressionPower(powerDeclaration.init);
+  return expressionPower === null
+    ? null
+    : { form: 'expression', power: expressionPower };
 }
 
 export function compileStudentCode(source: string): StudentCodeResult {
@@ -181,11 +219,19 @@ export function compileStudentCode(source: string): StudentCodeResult {
     statement && isThrowCall(statement.expression)
       ? getPowerArgument(statement.expression)
       : null;
-  const variablePower =
-    literalPower === null ? getVariablePower(program) : null;
-  const power = literalPower ?? variablePower;
-  if (power === null) {
-    return { ok: false, error: 'statement' };
+  let form: ThrowCodeForm;
+  let power: number;
+  if (literalPower !== null) {
+    form = 'literal';
+    power = literalPower;
+  } else {
+    const declaredPower = getDeclaredPower(program);
+    if (declaredPower === null) {
+      return { ok: false, error: 'statement' };
+    }
+
+    form = declaredPower.form;
+    power = declaredPower.power;
   }
 
   if (!Number.isFinite(power) || power < 1 || power > 10) {
@@ -195,6 +241,6 @@ export function compileStudentCode(source: string): StudentCodeResult {
   return {
     ok: true,
     command: { kind: 'throw', power },
-    form: literalPower === null ? 'variable' : 'literal',
+    form,
   };
 }
