@@ -14,6 +14,15 @@ import {
   recordCompletedThrow,
 } from './game/firstPowerMission';
 import {
+  initialCurrentMission,
+  moveToSecondMission,
+  type CurrentMission,
+} from './game/currentMission';
+import {
+  initialSecondPowerMissionState,
+  recordSecondPowerMissionThrow,
+} from './game/secondPowerMission';
+import {
   initialGameState,
   transitionGame,
   type GameStatus,
@@ -21,17 +30,26 @@ import {
 import {
   compileStudentCode,
   MAX_SHARED_STUDENT_CODE_LENGTH,
+  type ThrowCodeForm,
   type StudentCodeError,
 } from './game/studentCode';
 import { clampAim, calculateThrow, nudgeAim, type Aim } from './game/throwing';
 
 const keyboardStep = 28;
 const starterCode = 'biseok.throw({ power: 3 });';
+const secondMissionStarterCode = 'const power = 3;\nbiseok.throw({ power });';
 
 type AimDrag = Readonly<{
   aim: Aim;
   clientX: number;
   clientY: number;
+}>;
+
+type RoundCommand = Readonly<{
+  form: ThrowCodeForm;
+  mission: CurrentMission;
+  power: number;
+  round: number;
 }>;
 
 function supportsWebGL() {
@@ -65,7 +83,7 @@ function codeErrorMessage(error: StudentCodeError) {
     case 'power':
       return 'power를 1에서 10으로 고쳐요.';
     default:
-      return '이 줄을 biseok.throw({ power: 숫자 });로 고쳐요.';
+      return '허용된 던지기 코드 형식으로 고쳐요.';
   }
 }
 
@@ -73,7 +91,17 @@ export function App() {
   const [webglAvailable] = useState(supportsWebGL);
   const [game, setGame] = useState(initialGameState);
   const gameRef = useRef(initialGameState);
-  const [mission, setMission] = useState(initialFirstPowerMissionState);
+  const roundCommandRef = useRef<RoundCommand | null>(null);
+  const currentMissionRef = useRef<CurrentMission>(initialCurrentMission);
+  const [firstMission, setFirstMission] = useState(
+    initialFirstPowerMissionState,
+  );
+  const [currentMission, setCurrentMission] = useState<CurrentMission>(
+    initialCurrentMission,
+  );
+  const [secondMission, setSecondMission] = useState(
+    initialSecondPowerMissionState,
+  );
   const [aim, setAim] = useState<Aim>({ x: 0, y: 0 });
   const [code, setCode] = useState(starterCode);
   const [codeError, setCodeError] = useState<StudentCodeError | null>(null);
@@ -104,6 +132,12 @@ export function App() {
 
     setCodeError(null);
     setThrowPower(result.command.power);
+    roundCommandRef.current = {
+      form: result.form,
+      mission: currentMissionRef.current,
+      power: result.command.power,
+      round: gameRef.current.round,
+    };
     const nextGame = transitionGame(gameRef.current, { type: 'throw' });
     gameRef.current = nextGame;
     setGame(nextGame);
@@ -181,19 +215,39 @@ export function App() {
   };
 
   const finishAim = () => setDragStart(null);
-  const reset = () => {
+  const resetRound = () => {
     const nextGame = transitionGame(gameRef.current, { type: 'reset' });
     gameRef.current = nextGame;
+    roundCommandRef.current = null;
     setGame(nextGame);
     setAim({ x: 0, y: 0 });
     setDragStart(null);
     setCodeError(null);
     setDebugStats({ calls: 0, fps: 0, triangles: 0 });
   };
+  const reset = () => resetRound();
+  const startSecondMission = () => {
+    const nextMission = moveToSecondMission(
+      currentMissionRef.current,
+      firstMission,
+    );
+    if (nextMission !== 'second') {
+      return;
+    }
+
+    currentMissionRef.current = nextMission;
+    setCurrentMission(nextMission);
+    setSecondMission(initialSecondPowerMissionState);
+    setCode(secondMissionStarterCode);
+    resetRound();
+  };
   const finishRound = (round: number, status: 'success' | 'failure') => {
+    const roundCommand = roundCommandRef.current;
     if (
       round !== gameRef.current.round ||
-      gameRef.current.status !== 'flying'
+      gameRef.current.status !== 'flying' ||
+      !roundCommand ||
+      roundCommand.round !== round
     ) {
       return;
     }
@@ -203,8 +257,17 @@ export function App() {
       status,
     });
     gameRef.current = nextGame;
+    roundCommandRef.current = null;
     setGame(nextGame);
-    setMission((current) => recordCompletedThrow(current, throwPower));
+    if (roundCommand.mission === 'first') {
+      setFirstMission((current) =>
+        recordCompletedThrow(current, roundCommand.power),
+      );
+    } else {
+      setSecondMission((current) =>
+        recordSecondPowerMissionThrow(current, roundCommand),
+      );
+    }
   };
   const dotPosition = {
     left: `${50 + aim.x / 4}%`,
@@ -242,16 +305,27 @@ export function App() {
             <h2>이번 판 규칙</h2>
             <p className="rule">조준은 방향, power는 힘이에요.</p>
           </div>
-          <section aria-live="polite" className="first-mission">
-            <h2>첫 미션</h2>
-            <p>power를 바꿔 두 번 던져 보세요.</p>
-            <strong>
-              {mission.step === 2 ? '완료' : `${mission.step} / 2`}
-            </strong>
-            {mission.needsDifferentPowerHint ? (
-              <p>숫자를 조금 더 바꿔 보세요.</p>
-            ) : null}
-          </section>
+          {currentMission === 'first' ? (
+            <section aria-live="polite" className="first-mission">
+              <h2>첫 미션</h2>
+              <p>power를 바꿔 두 번 던져 보세요.</p>
+              <strong>
+                {firstMission.step === 2 ? '완료' : `${firstMission.step} / 2`}
+              </strong>
+              {firstMission.needsDifferentPowerHint ? (
+                <p>숫자를 조금 더 바꿔 보세요.</p>
+              ) : null}
+            </section>
+          ) : (
+            <section aria-live="polite" className="first-mission">
+              <h2>두 번째 미션</h2>
+              <p>power 변수의 숫자를 바꿔 던져 보세요.</p>
+              <strong>{secondMission.completed ? '완료' : '준비'}</strong>
+              {secondMission.needsChangedPowerHint ? (
+                <p>power의 숫자를 바꿔 보세요.</p>
+              ) : null}
+            </section>
+          )}
           <p className="status" aria-live="polite">
             {statusMessage(game.status)}
           </p>
@@ -309,6 +383,15 @@ export function App() {
             <button className="secondary-button" onClick={reset} type="button">
               다시 놓기
             </button>
+            {currentMission === 'first' && firstMission.step === 2 ? (
+              <button
+                className="secondary-button"
+                onClick={startSecondMission}
+                type="button"
+              >
+                다음 미션
+              </button>
+            ) : null}
           </div>
         </aside>
       </section>
