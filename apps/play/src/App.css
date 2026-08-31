@@ -84,7 +84,7 @@ h2 {
   line-height: 1.5;
 }
 
-.first-mission {
+.mission-card {
   display: grid;
   gap: 3px;
   padding: 9px 10px;
@@ -95,11 +95,11 @@ h2 {
   line-height: 1.35;
 }
 
-.first-mission h2 {
+.mission-card h2 {
   font-size: 0.9rem;
 }
 
-.first-mission strong {
+.mission-card strong {
   color: #45372f;
   font-size: 0.9rem;
 }

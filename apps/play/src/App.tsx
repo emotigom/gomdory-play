@@ -16,12 +16,17 @@ import {
 import {
   initialCurrentMission,
   moveToSecondMission,
+  moveToThirdMission,
   type CurrentMission,
 } from './game/currentMission';
 import {
   initialSecondPowerMissionState,
   recordSecondPowerMissionThrow,
 } from './game/secondPowerMission';
+import {
+  initialThirdPowerMissionState,
+  recordThirdPowerMissionThrow,
+} from './game/thirdPowerMission';
 import {
   initialGameState,
   transitionGame,
@@ -38,6 +43,8 @@ import { clampAim, calculateThrow, nudgeAim, type Aim } from './game/throwing';
 const keyboardStep = 28;
 const starterCode = 'biseok.throw({ power: 3 });';
 const secondMissionStarterCode = 'const power = 3;\nbiseok.throw({ power });';
+const thirdMissionStarterCode =
+  'const power = 3 + 0;\nbiseok.throw({ power });';
 
 type AimDrag = Readonly<{
   aim: Aim;
@@ -101,6 +108,9 @@ export function App() {
   );
   const [secondMission, setSecondMission] = useState(
     initialSecondPowerMissionState,
+  );
+  const [thirdMission, setThirdMission] = useState(
+    initialThirdPowerMissionState,
   );
   const [aim, setAim] = useState<Aim>({ x: 0, y: 0 });
   const [code, setCode] = useState(starterCode);
@@ -241,6 +251,21 @@ export function App() {
     setCode(secondMissionStarterCode);
     resetRound();
   };
+  const startThirdMission = () => {
+    const nextMission = moveToThirdMission(
+      currentMissionRef.current,
+      secondMission,
+    );
+    if (nextMission !== 'third') {
+      return;
+    }
+
+    currentMissionRef.current = nextMission;
+    setCurrentMission(nextMission);
+    setThirdMission(initialThirdPowerMissionState);
+    setCode(thirdMissionStarterCode);
+    resetRound();
+  };
   const finishRound = (round: number, status: 'success' | 'failure') => {
     const roundCommand = roundCommandRef.current;
     if (
@@ -263,9 +288,13 @@ export function App() {
       setFirstMission((current) =>
         recordCompletedThrow(current, roundCommand.power),
       );
-    } else {
+    } else if (roundCommand.mission === 'second') {
       setSecondMission((current) =>
         recordSecondPowerMissionThrow(current, roundCommand),
+      );
+    } else {
+      setThirdMission((current) =>
+        recordThirdPowerMissionThrow(current, roundCommand),
       );
     }
   };
@@ -306,7 +335,7 @@ export function App() {
             <p className="rule">조준은 방향, power는 힘이에요.</p>
           </div>
           {currentMission === 'first' ? (
-            <section aria-live="polite" className="first-mission">
+            <section aria-live="polite" className="mission-card">
               <h2>첫 미션</h2>
               <p>power를 바꿔 두 번 던져 보세요.</p>
               <strong>
@@ -316,13 +345,25 @@ export function App() {
                 <p>숫자를 조금 더 바꿔 보세요.</p>
               ) : null}
             </section>
-          ) : (
-            <section aria-live="polite" className="first-mission">
+          ) : currentMission === 'second' ? (
+            <section aria-live="polite" className="mission-card">
               <h2>두 번째 미션</h2>
               <p>power 변수의 숫자를 바꿔 던져 보세요.</p>
               <strong>{secondMission.completed ? '완료' : '준비'}</strong>
               {secondMission.needsChangedPowerHint ? (
                 <p>power의 숫자를 바꿔 보세요.</p>
+              ) : null}
+            </section>
+          ) : (
+            <section aria-live="polite" className="mission-card">
+              <h2>세 번째 미션</h2>
+              <p>더하기 식으로 power를 5 이상 만들어 보세요.</p>
+              <strong>{thirdMission.completed ? '완료' : '준비'}</strong>
+              {thirdMission.needsMinimumPowerHint ? (
+                <p>power를 5 이상으로 만들어 보세요.</p>
+              ) : null}
+              {thirdMission.needsExpressionHint ? (
+                <p>더하기 식을 사용해 보세요.</p>
               ) : null}
             </section>
           )}
@@ -387,6 +428,15 @@ export function App() {
               <button
                 className="secondary-button"
                 onClick={startSecondMission}
+                type="button"
+              >
+                다음 미션
+              </button>
+            ) : null}
+            {currentMission === 'second' && secondMission.completed ? (
+              <button
+                className="secondary-button"
+                onClick={startThirdMission}
                 type="button"
               >
                 다음 미션

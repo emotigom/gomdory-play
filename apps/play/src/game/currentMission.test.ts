@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { initialFirstPowerMissionState } from './firstPowerMission';
-import { initialCurrentMission, moveToSecondMission } from './currentMission';
+import { initialSecondPowerMissionState } from './secondPowerMission';
+import {
+  initialCurrentMission,
+  moveToSecondMission,
+  moveToThirdMission,
+} from './currentMission';
 
 describe('current mission transitions', () => {
   it('does not enter the second mission before the first is complete', () => {
@@ -18,5 +23,20 @@ describe('current mission transitions', () => {
         step: 2,
       }),
     ).toBe('second');
+  });
+
+  it('does not enter the third mission before the second is complete', () => {
+    expect(moveToThirdMission('second', initialSecondPowerMissionState)).toBe(
+      'second',
+    );
+  });
+
+  it('enters the third mission after the second is complete', () => {
+    expect(
+      moveToThirdMission('second', {
+        completed: true,
+        needsChangedPowerHint: false,
+      }),
+    ).toBe('third');
   });
 });
