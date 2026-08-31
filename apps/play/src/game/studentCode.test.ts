@@ -14,6 +14,48 @@ describe('compileStudentCode', () => {
     });
   });
 
+  it.each([
+    'biseok.throw({ power: 7, angle: 10 });',
+    'biseok.throw({ angle: 10, power: 7 });',
+  ])('converts the trajectory form in either property order: %s', (source) => {
+    expect(compileStudentCode(source)).toEqual({
+      ok: true,
+      command: { kind: 'throw', power: 7, angleDegrees: 10 },
+      form: 'trajectory',
+    });
+  });
+
+  it.each([
+    { power: 1, angle: 5 },
+    { power: 10, angle: 45 },
+  ])(
+    'accepts trajectory boundaries: power $power, angle $angle',
+    ({ power, angle }) => {
+      expect(
+        compileStudentCode(
+          `biseok.throw({ power: ${power}, angle: ${angle} });`,
+        ),
+      ).toEqual({
+        ok: true,
+        command: { kind: 'throw', power, angleDegrees: angle },
+        form: 'trajectory',
+      });
+    },
+  );
+
+  it('accepts trajectory code at the shared length limit', () => {
+    const source = 'biseok.throw({ power: 7, angle: 25 });'.padEnd(
+      MAX_SHARED_STUDENT_CODE_LENGTH,
+    );
+
+    expect(source).toHaveLength(MAX_SHARED_STUDENT_CODE_LENGTH);
+    expect(compileStudentCode(source)).toEqual({
+      ok: true,
+      command: { kind: 'throw', power: 7, angleDegrees: 25 },
+      form: 'trajectory',
+    });
+  });
+
   it('allows whitespace and line breaks around the same statement', () => {
     expect(
       compileStudentCode('\n biseok . throw ( { power : 3.5 } ) ; \n'),
@@ -125,6 +167,24 @@ describe('compileStudentCode', () => {
     ).toEqual({ ok: false, error: 'power' });
   });
 
+  it.each([4, 4.5, 45.5, 46, '1e309'])(
+    'rejects trajectory angle outside the finite 5 to 45 range: %s',
+    (angle) => {
+      expect(
+        compileStudentCode(`biseok.throw({ power: 7, angle: ${angle} });`),
+      ).toEqual({ ok: false, error: 'angle' });
+    },
+  );
+
+  it.each([0, 11, '1e309'])(
+    'keeps the power error for an invalid trajectory power: %s',
+    (power) => {
+      expect(
+        compileStudentCode(`biseok.throw({ power: ${power}, angle: 25 });`),
+      ).toEqual({ ok: false, error: 'power' });
+    },
+  );
+
   it.each(['0 + 0', '10 + 0.5', '1e309 + 0'])(
     'rejects expression results outside the finite 1 to 10 range: %s',
     (expression) => {
@@ -188,6 +248,22 @@ describe('compileStudentCode', () => {
     'const power = 7; biseok.throw({ power: power });',
     'const power = 7; biseok.throw({ power, extra: true });',
     'const power = 7; biseok.throw({ [power]: power });',
+    'biseok.throw({ power: 7, angle: 25, extra: 1 });',
+    'biseok.throw({ angle: 25 });',
+    'biseok.throw({ power: 7, power: 8 });',
+    'biseok.throw({ angle: 25, angle: 35 });',
+    'biseok.throw({ power: 7, ["angle"]: 25 });',
+    'biseok.throw({ power: 7, ...{ angle: 25 } });',
+    'biseok.throw({ power: 7, angle });',
+    'biseok.throw({ power: 7, angle() {} });',
+    'biseok.throw({ power: 7, get angle() { return 25; } });',
+    'biseok.throw({ power: 7, set angle(value) {} });',
+    'biseok.throw({ power: "7", angle: 25 });',
+    'biseok.throw({ power: 7, angle: "25" });',
+    'biseok.throw({ power: 7, angle: value });',
+    'biseok.throw({ power: 7, angle: getAngle() });',
+    'biseok.throw({ power: 7, angle: +25 });',
+    'biseok.throw({ power: 7, angle: 20 + 5 });',
   ])(
     'rejects statements and expressions outside the allowed shape: %s',
     (source) => {

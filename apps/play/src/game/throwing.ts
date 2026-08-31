@@ -1,3 +1,5 @@
+import { MathUtils } from 'three';
+
 export type Aim = Readonly<{
   x: number;
   y: number;
@@ -18,9 +20,29 @@ export function clampAim(aim: Aim): Aim {
   };
 }
 
-export function calculateThrow(aim: Aim, power: number): ThrowVector {
+export function calculateThrow(
+  aim: Aim,
+  power: number,
+  angleDegrees?: number,
+): ThrowVector {
   const strength = power * 1.4;
   const sideways = clamp(aim.x / 180, -0.55, 0.55);
+
+  if (angleDegrees !== undefined) {
+    const elevation = MathUtils.degToRad(angleDegrees);
+    const forwardDirection = Math.sqrt(Math.max(0.2, 1 - sideways ** 2));
+    const horizontal = Math.cos(elevation);
+
+    return {
+      impulse: {
+        x: sideways * horizontal * strength,
+        y: Math.sin(elevation) * strength,
+        z: -forwardDirection * horizontal * strength,
+      },
+      strength,
+    };
+  }
+
   const lift = 0.28 + clamp(-aim.y / 180, -0.12, 0.42);
   const forward = Math.sqrt(Math.max(0.2, 1 - sideways ** 2));
 
